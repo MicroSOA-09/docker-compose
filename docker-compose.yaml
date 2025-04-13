@@ -1,0 +1,116 @@
+version: '3.9'
+
+services:
+  explorer:
+    build:
+      dockerfile: Dockerfile
+      context: ../back-end
+      target: final
+    restart: on-failure
+    networks:
+      - postgreDB
+      - gateway
+    ports:
+      - "8080:80"
+    environment:
+      DATABASE_HOST: postgreDB
+      DATABASE_PORT: 5432
+      DATABASE_PASSWORD: super
+      DATABASE_USER: postgres
+      DATABASE_SCHEMA: explorer
+    depends_on:
+      - postgreDB
+  
+  blog-service:
+    build:
+      dockerfile: Dockerfile
+      context: ../blog-service
+      target: final
+    restart: on-failure
+    networks:
+      - blogDB
+      - gateway
+    ports:
+      - "4100:80"
+    environment:
+      DATABASE_HOST: blogDB
+      DATABASE_PORT: 5432
+      DATABASE_PASSWORD: super
+      DATABASE_USER: postgres
+      DATABASE_SCHEMA: explorer
+      DATABASE_SCHEMA_NAME: blog
+    depends_on:
+      blogDB:
+        condition: service_healthy
+  
+  blogDB:
+    image: postgres:13
+    restart: always
+    networks:
+      - blogDB
+    environment:
+      POSTGRES_PASSWORD: super
+      POSTGRES_USER: postgres
+      POSTGRES_DB: explorer
+    volumes:
+      - type: volume
+        source: blog-data
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ../blog-service/insert.sql
+        target: /tmp/insert.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  postgreDB:
+    image: postgres:13
+    restart: always
+    networks:
+      - postgreDB
+    environment:
+      POSTGRES_PASSWORD: super
+      POSTGRES_USER: postgres
+      POSTGRES_DB: explorer
+    volumes:
+      - type: volume
+        source: database-data
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ../back-end/insert.sql
+        target: /tmp/insert.sql
+  
+
+  front:
+    build:
+      dockerfile: Dockerfile
+      context: ../front-end/Explorer
+      target: final
+    restart: on-failure
+    networks:
+      - gateway
+    ports:
+      - "4200:80"
+    depends_on:
+      - explorer
+      - blog-service
+
+volumes:
+  database-data:
+    name: explorer
+  blog-data:
+    name: blog-vol
+
+networks:
+  gateway:
+    name: gateway
+    driver: bridge
+  postgreDB:
+    name: postgreDB
+    driver: bridge
+  blogDB:
+    name: blogDB
+    driver: bridge
