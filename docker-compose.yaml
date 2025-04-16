@@ -11,7 +11,7 @@ services:
       - postgreDB
       - gateway
     ports:
-      - "8080:80"
+      - "8081:80"
     environment:
       DATABASE_HOST: postgreDB
       DATABASE_PORT: 5432
@@ -31,7 +31,7 @@ services:
       - blogDB
       - gateway
     ports:
-      - "4100:80"
+      - "8090:80"
     environment:
       DATABASE_HOST: blogDB
       DATABASE_PORT: 5432
@@ -39,10 +39,63 @@ services:
       DATABASE_USER: postgres
       DATABASE_SCHEMA: explorer
       DATABASE_SCHEMA_NAME: blog
+      USER_SERVICE_URL: auth-service:80
     depends_on:
       blogDB:
         condition: service_healthy
+
   
+  auth-service:
+    build:
+      dockerfile: Dockerfile
+      context: ../auth-service
+      target: final
+    restart: on-failure
+    networks:
+      - gateway
+    ports:
+      - "8100:80"
+    environment:
+      PORT: 80
+      JWT_SECRET: golang-en^aj$^h@aqu=^7xzv6-0x+is-((zoe^gf1dljqio1f#4)k3^d
+      MAIL_USER: slobodanobradovic24@gmail.com
+      MAIL_APP_PASSWORD: bpwzyoxdvsbnwupp
+      MONGO_DB_URI: mongodb+srv://sloba:sloba@cluster0.26mybem.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+
+  gateway-service:
+    build:
+      dockerfile: Dockerfile
+      context: ../gateway-service
+      target: final
+    restart: on-failure
+    networks:
+      - gateway
+    ports:
+      - "8110:80"
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:80
+      USER_SERVICE_URL: http://auth-service:80
+      BLOG_SERVICE_URL: http://blog-service:80
+      ASP_SERVICE_URL: http://explorer:80
+      PORT: 80
+    depends_on:
+      - explorer
+      - blog-service
+      - auth-service
+  
+  front:
+    build:
+      dockerfile: Dockerfile
+      context: ../front-end/Explorer
+      target: final
+    restart: on-failure
+    networks:
+      - gateway
+    ports:
+      - "4200:80"
+    depends_on:
+      - gateway-service
+
   blogDB:
     image: postgres:13
     restart: always
@@ -84,19 +137,6 @@ services:
         target: /tmp/insert.sql
   
 
-  front:
-    build:
-      dockerfile: Dockerfile
-      context: ../front-end/Explorer
-      target: final
-    restart: on-failure
-    networks:
-      - gateway
-    ports:
-      - "4200:80"
-    depends_on:
-      - explorer
-      - blog-service
 
 volumes:
   database-data:
